@@ -9,15 +9,14 @@ DSH Web 界面内置的悬浮 GPU 监控。实时显示每张 GPU 的**利用率
 ## 安装
 
 ```sh
-# 从 npm
-dsh plugin --profile web add dsh-gpu-pulse
-
-# 或从 GitHub
+# 从 GitHub
 dsh plugin --profile web add github:zhubaohi/dsh-gpu-pulse
 
 # 或从本地目录
 dsh plugin --profile web add /path/to/dsh-gpu-pulse
 ```
+
+npm 包名 `dsh-gpu-pulse` 已预留——npm 包发布后 `dsh plugin --profile web add dsh-gpu-pulse` 即可用。
 
 然后重启 `dsh web`。卡片出现在 GUI 右下角；点 `–` 可折叠为一行胶囊（`GPU 42% · 67°C`），折叠状态会被记住。
 

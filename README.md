@@ -9,15 +9,14 @@ Works on any machine with an NVIDIA driver (Windows or Linux): the data comes fr
 ## Install
 
 ```sh
-# from npm
-dsh plugin --profile web add dsh-gpu-pulse
-
-# or from GitHub
+# from GitHub
 dsh plugin --profile web add github:zhubaohi/dsh-gpu-pulse
 
 # or from a local clone
 dsh plugin --profile web add /path/to/dsh-gpu-pulse
 ```
+
+The npm name `dsh-gpu-pulse` is reserved — `dsh plugin --profile web add dsh-gpu-pulse` will work once the npm package is published.
 
 Then restart `dsh web`. The card appears at the bottom-right corner of the GUI; the `–` button collapses it to a one-line pill (`GPU 42% · 67°C`), and the collapsed state persists.
 
