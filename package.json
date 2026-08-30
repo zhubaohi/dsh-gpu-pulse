@@ -1,0 +1,59 @@
+{
+  "name": "dsh-gpu-pulse",
+  "version": "1.0.0",
+  "description": "Floating GPU monitor inside the DSH Web UI: live per-GPU utilization, VRAM, temperature, power and top processes from nvidia-smi. · DSH Web 内置悬浮 GPU 监控：实时显示每张 GPU 的利用率、显存、温度、功耗与占用进程（nvidia-smi）。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "index.js",
+    "client",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "gpu",
+    "nvidia",
+    "nvidia-smi",
+    "monitor",
+    "temperature",
+    "utilization",
+    "vram"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhubaohi/dsh-gpu-pulse"
+  },
+  "homepage": "https://github.com/zhubaohi/dsh-gpu-pulse"
+}

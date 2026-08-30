@@ -1,0 +1,28 @@
+# dsh-gpu-pulse bundle patch
+#
+# Mounted through the official CLI:
+#
+#   dsh plugin --profile <name> add dsh-gpu-pulse
+#
+# `dsh plugin add` sees the `dsh.bundle.patch` declaration in this package's
+# package.json and appends `dsh-gpu-pulse` to the profile bundle stack; at
+# boot this patch inserts the plugin row below — same mechanism as the manual
+# mount line, no profile file edits.
+#
+# The host half registers GET /dsh-gpu-pulse/status (nvidia-smi telemetry);
+# the client half mounts a floating widget into the `shell.overlay` slot of
+# the DSH Web UI.
+#
+# Optional per-profile overrides go in the profile's own cordis.patch.yml
+# (an id-targeted patch REPLACES the whole config — restate every field you
+# want to keep):
+#
+#   - id: dsh-gpu-pulse
+#     config:
+#       pollMs: 3000
+#       showProcesses: true
+#       nvidiaSmiPath: 'C:\Windows\System32\nvidia-smi.exe'
+#
+- insert:
+    - id: dsh-gpu-pulse
+      name: 'dsh-gpu-pulse'
