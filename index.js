@@ -1,5 +1,6 @@
 /**
- * dsh-gpu-pulse — host half (early stage: single metrics query, no cache).
+ * dsh-gpu-pulse — host half (adds per-GPU names + driver version via
+ * parallel nvidia-smi queries).
  */
 import { execFile } from 'node:child_process'
 
@@ -46,6 +47,25 @@ function parseMetricsLines(text) {
   return out
 }
 
+function parseNameLines(text) {
+  const names = new Map()
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line === '') continue
+    const first = line.indexOf(',')
+    if (first === -1) continue
+    const idx = toNum(line.slice(0, first).trim())
+    if (idx === null) continue
+    names.set(idx, line.slice(first + 1).trim())
+  }
+  return names
+}
+
+function parseDriverVersion(text) {
+  const m = /driver version:\s*([^\r\n]+)/i.exec(text)
+  return m ? m[1].trim() : null
+}
+
 export function apply(ctx, config) {
   const smiPath = (config && config.nvidiaSmiPath) || 'nvidia-smi'
 
@@ -61,17 +81,24 @@ export function apply(ctx, config) {
             return
           }
           try {
-            const out = await runSmi(smiPath, [
-              '--query-gpu',
-              'index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,fan.speed',
-              '--format=csv,noheader,nounits'
+            const [metricsRes, namesRes, versionRes] = await Promise.allSettled([
+              runSmi(smiPath, [
+                '--query-gpu',
+                'index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,fan.speed',
+                '--format=csv,noheader,nounits'
+              ]),
+              runSmi(smiPath, ['--query-gpu', 'index,name', '--format=csv,noheader,nounits']),
+              runSmi(smiPath, ['--version'])
             ])
-            const gpus = parseMetricsLines(out).map(m => ({ ...m, name: `GPU ${m.index ?? 0}` }))
+            if (metricsRes.status !== 'fulfilled') throw metricsRes.reason
+            const names = namesRes.status === 'fulfilled' ? parseNameLines(namesRes.value) : new Map()
+            const driverVersion = versionRes.status === 'fulfilled' ? parseDriverVersion(versionRes.value) : null
+            const gpus = parseMetricsLines(metricsRes.value).map(m => ({ ...m, name: names.get(m.index) ?? `GPU ${m.index ?? 0}` }))
             response.writeHead(200, {
               'content-type': 'application/json; charset=utf-8',
               'cache-control': 'no-store'
             })
-            response.end(JSON.stringify({ ok: true, backend: 'nvidia-smi', gpus, ts: Date.now() }))
+            response.end(JSON.stringify({ ok: true, backend: 'nvidia-smi', driverVersion, gpus, ts: Date.now() }))
           } catch (err) {
             response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
             response.end(JSON.stringify({
