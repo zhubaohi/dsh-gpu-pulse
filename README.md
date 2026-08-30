@@ -1,10 +1,14 @@
 # dsh-gpu-pulse
 
-A floating GPU monitor inside the DSH Web UI. Live per-GPU **utilization, VRAM, temperature, power and fan** — plus top VRAM-consuming processes when the driver reports them — rendered as a compact card in the corner of the DeepSeek Harness page.
+A floating GPU monitor inside the DSH Web UI. Live per-GPU **utilization, VRAM, temperature, power and fan**, plus the top VRAM-consuming processes when the driver reports them, rendered as a compact card in the corner of the DeepSeek Harness page.
 
-Works on any machine with an NVIDIA driver (Windows or Linux): the data comes from `nvidia-smi`, so multi-GPU rigs show one instrument block per GPU. No extra service to run, no agent tools to call — the card polls the DSH host's own route.
+Works on any machine with an NVIDIA driver (Windows or Linux): the data comes from `nvidia-smi`, so multi-GPU rigs show one instrument block per GPU. No extra service to run and no agent tools to call: the card polls the DSH host's own route.
 
-**Note:** the plugin is NVIDIA-only (nvidia-smi backend). On machines without an NVIDIA driver it degrades to a small `GPU — n/a` pill and re-probes every 5 minutes, so it lights up on its own once a driver is installed.
+**Note:** the plugin is NVIDIA-only (nvidia-smi backend). On machines without an NVIDIA driver it degrades to a small `GPU n/a` pill and re-probes every 5 minutes, so it lights up on its own once a driver is installed.
+
+## Screenshot
+
+![dsh-gpu-pulse card in the DSH Web UI, showing two NVIDIA GPUs](docs/screenshot.png)
 
 ## Install
 
@@ -16,24 +20,24 @@ dsh plugin --profile web add github:zhubaohi/dsh-gpu-pulse
 dsh plugin --profile web add /path/to/dsh-gpu-pulse
 ```
 
-The npm name `dsh-gpu-pulse` is reserved — `dsh plugin --profile web add dsh-gpu-pulse` will work once the npm package is published.
+The npm name `dsh-gpu-pulse` is reserved: `dsh plugin --profile web add dsh-gpu-pulse` will work once the npm package is published.
 
-Then restart `dsh web`. The card appears at the bottom-right corner of the GUI; the `–` button collapses it to a one-line pill (`GPU 42% · 67°C`), and the collapsed state persists.
+Then restart `dsh web`. The card appears at the bottom-right corner of the GUI; the minus button in the header collapses it to a one-line pill (`GPU 42% · 67°C`), and the collapsed state persists.
 
 ## What you see
 
-- **GPU** — utilization bar + history sparkline (color-graded: green < 60%, amber 60–85%, red ≥ 85%)
-- **VRAM** — used/total GiB bar (green < 75%, amber 75–90%, red ≥ 90%)
-- **TEMP** — temperature + history sparkline (green < 65 °C, amber 65–80 °C, red ≥ 80 °C)
-- **PWR** — power draw + fan speed bar
-- **TOP PROCESSES** — the biggest VRAM consumers, when the driver attributes memory per process (most recent Windows drivers report `[N/A]` for graphics contexts, in which case this section is omitted)
+- **GPU**: utilization bar + history sparkline (color-graded: green below 60%, amber 60-85%, red at 85% and above)
+- **VRAM**: used/total GiB bar (green below 75%, amber 75-90%, red at 90% and above)
+- **TEMP**: temperature + history sparkline (green below 65 °C, amber 65-80 °C, red at 80 °C and above)
+- **PWR**: power draw + fan speed bar
+- **TOP PROCESSES**: the biggest VRAM consumers, when the driver attributes memory per process (most recent Windows drivers report `[N/A]` for graphics contexts, in which case this section is omitted)
 - footer: driver (KMD) version + timestamp of the last sample
 
-One block per GPU; the header dot turns amber/red when any GPU crosses its thresholds.
+One block per GPU; the header dot turns amber or red when any GPU crosses its thresholds.
 
 ## Configuration
 
-Everything is optional — defaults work out of the box. Override in the profile's `cordis.patch.yml` (an id-targeted patch replaces the whole config, so restate every field you want to keep):
+Everything is optional: defaults work out of the box. Override in the profile's `cordis.patch.yml` (an id-targeted patch replaces the whole config, so restate every field you want to keep):
 
 ```yaml
 - id: dsh-gpu-pulse
@@ -58,4 +62,4 @@ Everything is optional — defaults work out of the box. Override in the profile
 
 ## License
 
-MIT — see [LICENSE](LICENSE). `nvidia-smi` is a NVIDIA Corporation tool, invoked read-only.
+MIT, see [LICENSE](LICENSE). `nvidia-smi` is a NVIDIA Corporation tool, invoked read-only.
