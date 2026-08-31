@@ -3,6 +3,17 @@
 All notable changes to `dsh-gpu-pulse` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-08-31
+
+### Fixed
+- The widget no longer disappears when a side panel or side card is opened (for example the `dsh-better-sidebar` Files panel): the client promotes the `shell.overlay` layer to the top of the app's z-stack at runtime, so side cards can never cover it.
+- The collapsed state is now a compact chip with one row per GPU, showing the exact GPU name, utilization, temperature and power draw. Previously it was a single line with the maximum values and no power, so expanding was required to see the rest.
+- Power draw is now visible without expanding the card.
+- Watts below 1 kW are formatted as whole numbers (`86 W` instead of `86.0 W`).
+
+### Changed
+- Documented that the display covers every discrete GPU: `nvidia-smi` only reports discrete NVIDIA adapters, so integrated GPUs are never part of the display.
+
 ## [1.0.0] - 2026-08-30
 
 ### Added

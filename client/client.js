@@ -8,11 +8,15 @@
  * `react` — so there are no externals to keep in sync with the host build.
  *
  * UI: a floating card in the `shell.overlay` slot (bottom-right of the DSH
- * Web UI) polling GET /dsh-gpu-pulse/status (host half). Renders per-GPU
+ * Web UI) polling GET /dsh-gpu-pulse/status (host half). Renders every
+ * discrete GPU (integrated GPUs are not exposed by nvidia-smi) as
  * utilization / VRAM / temperature / power + fan rows with sparklines, a
  * top-process list when the host collected compute apps, and a collapsed
- * pill mode persisted in localStorage. Colors follow the active theme via
- * --dsw-* token variables (static fallbacks keep older hosts readable).
+ * chip mode persisted in localStorage that keeps one row per GPU with the
+ * exact GPU name and power draw. At runtime the widget promotes the
+ * overlay layer's z-index so side-card plugins (dsh-better-sidebar) cannot
+ * cover it. Colors follow the active theme via --dsw-* token variables
+ * (static fallbacks keep older hosts readable).
  */
 window.__ModuleLoader__.load({
   id: "dsh-gpu-pulse",
@@ -40,7 +44,7 @@ window.__ModuleLoader__.load({
       const gb = mib / 1024;
       return (gb >= 10 ? gb.toFixed(0) : gb.toFixed(1)) + " GB";
     };
-    const fmtW = (w) => (w == null ? "—" : (w >= 100 ? w.toFixed(0) : w.toFixed(1)) + " W");
+    const fmtW = (w) => (w == null ? "—" : w >= 1000 ? (w / 1000).toFixed(2) + " kW" : Math.round(w) + " W");
     const fmtPct = (p) => (p == null ? "—" : Math.round(p) + "%");
 
     const toneVar = (tone) =>
@@ -85,7 +89,15 @@ window.__ModuleLoader__.load({
       "." + NS + "-foot{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,130,135,.18));font-size:11px;color:var(--dsw-alias-label-secondary,#545557)}",
       "." + NS + "-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--dsw-alias-bg-overlay,#ffffff);border:1px solid var(--dsw-alias-border-l2,#dcdcdc);box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(15,15,15,.14));font-size:12px;cursor:pointer}",
       "." + NS + "-pill:hover{border-color:var(--dsw-alias-brand-primary,#4176e6)}",
-      "." + NS + "-pillsub{font-size:11px;color:var(--dsw-alias-label-secondary,#545557);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+      "." + NS + "-pillsub{font-size:11px;color:var(--dsw-alias-label-secondary,#545557);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      "." + NS + "-chip{width:340px;background:var(--dsw-alias-bg-overlay,#ffffff);border:1px solid var(--dsw-alias-border-l2,#dcdcdc);border-radius:12px;box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(15,15,15,.14));padding:7px 10px;cursor:pointer}",
+      "." + NS + "-chip:hover{border-color:var(--dsw-alias-brand-primary,#4176e6)}",
+      "." + NS + "-chiphead{display:flex;align-items:center;gap:7px;margin-bottom:4px}",
+      "." + NS + "-chiptitle{flex:1;font-size:11px;font-weight:600;letter-spacing:.02em}",
+      "." + NS + "-chipsub{font-size:11px;color:var(--dsw-alias-label-secondary,#545557)}",
+      "." + NS + "-chiprow{display:flex;align-items:center;gap:8px;margin:2px 0;font-size:11px}",
+      "." + NS + "-chipname{flex:none;max-width:168px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}",
+      "." + NS + "-chipstats{margin-left:auto;color:var(--dsw-alias-label-secondary,#545557);font-family:var(--ds-font-family-code,ui-monospace,monospace)}"
     ].join("\n");
 
     // ---- small components -----------------------------------------------
@@ -177,6 +189,28 @@ window.__ModuleLoader__.load({
       const historyRef = useRef({});
       const pollMsRef = useRef(2000);
       const inFlight = useRef(false);
+      const rootRef = useRef(null);
+
+      // Stacking fix: the host app stacks the shell.overlay layer at z-index 20,
+      // while side-panel plugins (dsh-better-sidebar: panel host z 25, panel
+      // z 40, floating window z 42) paint above it, so an opened side card
+      // covers the widget. Walk up from the widget root to the overlay layer
+      // (the nearest absolute, pointer-events:none ancestor) and promote it to
+      // the app's top-of-stack value so the widget stays visible over side
+      // cards. The layer keeps pointer-events:none, so nothing else is blocked.
+      useEffect(() => {
+        const el0 = rootRef.current;
+        if (!el0 || typeof document === "undefined") return;
+        let el = el0;
+        while (el && el !== document.body) {
+          const s = getComputedStyle(el);
+          if (s.position === "absolute" && s.pointerEvents === "none") {
+            if (parseInt(s.zIndex, 10) < 2147483000) el.style.zIndex = "2147483000";
+            return;
+          }
+          el = el.parentElement;
+        }
+      });
 
       useEffect(() => {
         try { localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0"); } catch (e) { /* private mode */ }
@@ -219,14 +253,14 @@ window.__ModuleLoader__.load({
 
       // Loading / driver-missing: a quiet pill, not a card.
       if (data == null) {
-        return h("div", { className: NS },
-          h("div", { className: NS + "-pill", title: "GPU Pulse — waiting for the first sample" },
+        return h("div", { className: NS, ref: rootRef },
+          h("div", { className: NS + "-pill", title: "GPU Pulse, waiting for the first sample" },
             h("span", { className: NS + "-dot " + NS + "-dot-off" }),
             h("span", null, "GPU"),
             h("span", { className: NS + "-pillsub" }, "…")));
       }
       if (!data.ok) {
-        return h("div", { className: NS },
+        return h("div", { className: NS, ref: rootRef },
           h("div", { className: NS + "-pill", title: data.reason || "GPU telemetry unavailable" },
             h("span", { className: NS + "-dot " + NS + "-dot-off" }),
             h("span", null, "GPU"),
@@ -240,15 +274,25 @@ window.__ModuleLoader__.load({
             : "ok";
 
       if (collapsed) {
-        const maxUtil = gpus.reduce((m, g) => Math.max(m, g.util ?? 0), 0);
-        const maxTemp = gpus.reduce((m, g) => Math.max(m, g.temp ?? 0), 0);
-        return h("div", { className: NS },
-          h("div", { className: NS + "-pill", title: "GPU Pulse — click to expand", onClick: () => setCollapsed(false) },
-            h("span", { className: NS + "-dot " + NS + "-dot-" + worst }),
-            h("span", null, "GPU"),
-            h("span", { className: NS + "-pillsub" },
-              gpus.length === 0 ? "no GPUs" :
-                Math.round(maxUtil) + "% · " + (maxTemp === 0 ? "—" : Math.round(maxTemp) + "°C"))));
+        // Collapsed chip: one row per GPU with the exact GPU name and the
+        // power draw, so every GPU's state is visible without expanding.
+        return h("div", { className: NS, ref: rootRef },
+          h("div", { className: NS + "-chip", title: "GPU Pulse, click to expand", onClick: () => setCollapsed(false) },
+            h("div", { className: NS + "-chiphead" },
+              h("span", { className: NS + "-dot " + NS + "-dot-" + worst }),
+              h("span", { className: NS + "-chiptitle" }, "GPU Pulse"),
+              h("span", { className: NS + "-chipsub" }, gpus.length + " GPU" + (gpus.length === 1 ? "" : "s"))
+            ),
+            gpus.length === 0
+              ? h("div", { className: NS + "-chiprow" },
+                h("span", { className: NS + "-chipname" }, "no GPUs reported"))
+              : gpus.map((g) =>
+                  h("div", { key: g.index != null ? g.index : g.name, className: NS + "-chiprow" },
+                    h("span", { className: NS + "-chipname", title: g.name }, g.name),
+                    h("span", { className: NS + "-chipstats" },
+                      fmtPct(g.util) + " · " + (g.temp == null ? "—" : Math.round(g.temp) + "°C") + " · " + fmtW(g.powerW)))
+                )
+          ));
       }
 
       const gpusEl = gpus.length === 0
@@ -268,7 +312,7 @@ window.__ModuleLoader__.load({
         );
       }
 
-      return h("div", { className: NS },
+      return h("div", { className: NS, ref: rootRef },
         h("div", { className: NS + "-card" },
           h("div", { className: NS + "-head" },
             h("span", { className: NS + "-dot " + NS + "-dot-" + worst }),
