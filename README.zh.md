@@ -1,6 +1,6 @@
 # dsh-gpu-pulse
 
-DSH Web 界面内置的悬浮 GPU 监控。实时显示每张 GPU 的**利用率、显存、温度与功耗**，当驱动支持按进程归因显存时还会列出占用最高的进程，以紧凑条带形式（每张 GPU 一行）渲染在 DeepSeek Harness 页面角落。
+DSH Web 界面内置的悬浮 GPU 监控。实时显示每张 GPU 的**利用率、显存、温度与功耗**，当驱动支持按进程归因显存时还会列出占用最高的进程，以紧凑可拖动的条带形式（每张 GPU 一行）渲染在 DeepSeek Harness 页面。
 
 适用于任何装有 NVIDIA 驱动的机器（Windows 或 Linux）：数据来自 `nvidia-smi`，多 GPU 平台会为每张 GPU 显示一块独立的仪表区。`nvidia-smi` 只上报独立的 NVIDIA 显卡，因此核显（Intel UHD、AMD iGPU 等）不会出现在显示中。无需额外常驻服务，也无需调用 agent 工具：卡片直接轮询 DSH 宿主自带的接口。
 
@@ -12,9 +12,9 @@ DSH Web 界面内置的悬浮 GPU 监控。实时显示每张 GPU 的**利用率
 
 侧边面板或侧边卡片打开时（例如 `dsh-better-sidebar` 的 Files 面板），条带会保持在最上层，不会被遮挡。
 
-点右上角减号按钮可将条带折叠为无头部与页脚的紧凑形态（同样的每张 GPU 一行）：
+## 位置
 
-![dsh-gpu-pulse 折叠形态，每张 GPU 一行](docs/screenshot-chip.png)
+条带默认出现在右下角，并且**可拖动**：按住拖到页面任意位置即可。位置会被记住（按浏览器配置持久保存），因此新建会话或重启后仍保持上次放的位置。双击条带可恢复到默认角落。
 
 ## 安装
 
@@ -28,7 +28,7 @@ dsh plugin --profile web add /path/to/dsh-gpu-pulse
 
 npm 包名 `dsh-gpu-pulse` 已预留：npm 包发布后 `dsh plugin --profile web add dsh-gpu-pulse` 即可用。
 
-然后重启 `dsh web`。条带出现在 GUI 右下角；点右上角减号按钮可将其折叠为无头部与页脚的紧凑形态，折叠状态会被记住。
+然后重启 `dsh web`。条带出现在 GUI 右下角；拖动到任意位置即可，位置会被记住。
 
 ## 界面内容
 
@@ -43,7 +43,7 @@ npm 包名 `dsh-gpu-pulse` 已预留：npm 包发布后 `dsh plugin --profile we
 - **TOP PROCESSES**：显存占用最高的进程；多数新版 Windows 驱动对图形上下文返回 `[N/A]`，此时该区块自动省略
 - 页脚：驱动（KMD）版本 + 最近一次采样的时间戳
 
-每行与折叠形态都显示驱动报告的精确 GPU 名称。
+每行都显示驱动报告的精确 GPU 名称。
 
 ## 配置
 
@@ -62,7 +62,7 @@ npm 包名 `dsh-gpu-pulse` 已预留：npm 包发布后 `dsh plugin --profile we
 ## 工作原理
 
 - **宿主端**（`index.js`）：在 DSH 宿主 web server 上注册 `GET /dsh-gpu-pulse/status`。每次请求最多并行执行四条 `nvidia-smi` 查询（`--query-gpu` 指标、`--query-gpu=index,name`、`--version`，以及可选的 `--query-compute-apps`），超时 4 秒，解析 CSV 后返回 JSON。结果缓存约 1.2 秒，多个标签页的并发轮询共享同一进程。
-- **客户端**（`client/client.js`）：手写的 `__ModuleLoader__` 插件包（无构建步骤，唯一的 require 是平台内置的 `react` 种子模块），把组件挂到 `shell.overlay` 槽。它轮询状态接口，并使用当前主题的 `--dsw-*` token 变量着色（带静态回退值，旧宿主也能正常显示）。由于侧边面板类插件的层级高于 overlay 槽的默认层级，客户端在运行时把 overlay 层提升到应用最高层级，保证侧边卡片打开时组件仍然可见。
+- **客户端**（`client/client.js`）：手写的 `__ModuleLoader__` 插件包（无构建步骤，唯一的 require 是平台内置的 `react` 种子模块），把组件挂到 `shell.overlay` 槽。它轮询状态接口，使用当前主题的 `--dsw-*` token 变量着色（带静态回退值，旧宿主也能正常显示），并用自身的指针事件实现拖动（位置保存在 `localStorage` 的 `dsh-gpu-pulse:pos` 键下）。由于侧边面板类插件的层级高于 overlay 槽的默认层级，客户端在运行时把 overlay 层提升到应用最高层级，保证侧边卡片打开时组件仍然可见。
 
 ## 要求
 

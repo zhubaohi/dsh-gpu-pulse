@@ -3,6 +3,14 @@
 All notable changes to `dsh-gpu-pulse` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-08-31
+
+### Added
+- Draggable strip: press and drag the widget to any spot on the page; the position persists in `localStorage` (survives new sessions and reboots on the same browser profile). Double-click resets it to the default corner. The strip is clamped to the viewport when the window shrinks.
+
+### Removed
+- The expand/collapse toggle: the widget now always renders a single format (the compact strip). The `dsh-gpu-pulse:collapsed` storage key is no longer read.
+
 ## [1.1.0] - 2026-08-31
 
 ### Changed

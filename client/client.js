@@ -7,16 +7,18 @@
  * runner. The bundle `require`s exactly one module — the platform seed
  * `react` — so there are no externals to keep in sync with the host build.
  *
- * UI: a compact floating strip in the `shell.overlay` slot (bottom-right of
- * the DSH Web UI) polling GET /dsh-gpu-pulse/status (host half). It renders
- * every discrete GPU (integrated GPUs are not exposed by nvidia-smi) as a
- * single row: status dot, exact GPU name, utilization, VRAM, temperature and
- * power draw, plus a top-process list when the host collected compute apps.
- * A collapsed state (persisted in localStorage) drops the header and footer.
- * At runtime the widget promotes the overlay layer's z-index so side-card
- * plugins (dsh-better-sidebar) cannot cover it. Colors follow the active
- * theme via --dsw-* token variables (static fallbacks keep older hosts
- * readable).
+ * UI: a compact floating strip in the `shell.overlay` slot (the DSH Web UI)
+ * polling GET /dsh-gpu-pulse/status (host half). It always renders the same
+ * format: one row per discrete GPU (integrated GPUs are not exposed by
+ * nvidia-smi) with status dot, exact GPU name, utilization, VRAM,
+ * temperature and power draw, plus a top-process list when the host
+ * collected compute apps, and a slim footer. The strip is draggable: the
+ * pointer position persists in localStorage (survives new sessions and
+ * reboots on the same browser profile); double-clicking resets it to the
+ * default corner. At runtime the widget promotes the overlay layer's
+ * z-index so side-card plugins (dsh-better-sidebar) cannot cover it. Colors
+ * follow the active theme via --dsw-* token variables (static fallbacks
+ * keep older hosts readable).
  */
 window.__ModuleLoader__.load({
   id: "dsh-gpu-pulse",
@@ -25,12 +27,30 @@ window.__ModuleLoader__.load({
     var exports = module.exports;
     let react = require("react");
     const h = react.createElement;
-    const { useState, useEffect, useRef } = react;
+    const { useState, useEffect, useRef, useCallback } = react;
 
     const NS = "dsh-gpu-pulse";
     const STATUS_PATH = "/dsh-gpu-pulse/status";
-    const COLLAPSE_KEY = "dsh-gpu-pulse:collapsed";
+    const POS_KEY = "dsh-gpu-pulse:pos";
     const MIN_POLL_MS = 1000;
+
+    // ---- position persistence -------------------------------------------
+
+    function loadPos() {
+      try {
+        const raw = localStorage.getItem(POS_KEY);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return { x: p.x, y: p.y };
+      } catch (e) { /* bad storage: fall back to the default corner */ }
+      return null;
+    }
+    function savePos(p) {
+      try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch (e) { /* private mode */ }
+    }
+    function clearPos() {
+      try { localStorage.removeItem(POS_KEY); } catch (e) { /* private mode */ }
+    }
 
     // ---- tone + formatting helpers -------------------------------------
 
@@ -56,11 +76,9 @@ window.__ModuleLoader__.load({
 
     const CSS = [
       "." + NS + "{position:fixed;right:16px;bottom:16px;z-index:30;font:11px/1.35 var(--dsw-font-family,-apple-system,'Segoe UI',sans-serif);color:var(--dsw-alias-label-primary,#1f2328);user-select:none;-webkit-user-select:none}",
-      "." + NS + "-card{width:340px;background:var(--dsw-alias-bg-overlay,#ffffff);border:1px solid var(--dsw-alias-border-l2,#dcdcdc);border-radius:10px;box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(15,15,15,.14));overflow:hidden}",
-      "." + NS + "-head{display:flex;justify-content:flex-end;padding:3px 6px 0}",
-      "." + NS + "-btn{flex:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#545557);font:11px/1 var(--dsw-font-family,inherit);cursor:pointer;padding:1px 6px;border-radius:5px}",
-      "." + NS + "-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,130,135,.12))}",
-      "." + NS + "-body{padding:2px 10px 4px;max-height:50vh;overflow-y:auto}",
+      "." + NS + "-card{width:340px;background:var(--dsw-alias-bg-overlay,#ffffff);border:1px solid var(--dsw-alias-border-l2,#dcdcdc);border-radius:10px;box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(15,15,15,.14));overflow:hidden;cursor:grab;touch-action:none}",
+      "." + NS + "-card-dragging{cursor:grabbing;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(15,15,15,.22))}",
+      "." + NS + "-body{padding:4px 10px 0}",
       "." + NS + "-row{display:flex;align-items:center;gap:8px;padding:3px 0}",
       "." + NS + "-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--dsw-static-green-400,#4ed17e)}",
       "." + NS + "-dot-warn{background:var(--dsw-static-amber-400,#f7ad31)}",
@@ -78,13 +96,10 @@ window.__ModuleLoader__.load({
       "." + NS + "-procstitle{margin-bottom:2px;font-size:10px;letter-spacing:.04em;color:var(--dsw-alias-label-secondary,#545557)}",
       "." + NS + "-proc{display:flex;justify-content:space-between;gap:8px;font-size:10px;font-family:var(--ds-font-family-code,ui-monospace,monospace);padding:1px 0}",
       "." + NS + "-procname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      "." + NS + "-foot{display:flex;justify-content:space-between;gap:8px;padding:3px 10px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,130,135,.18));font-size:10px;color:var(--dsw-alias-label-secondary,#545557)}",
+      "." + NS + "-foot{display:flex;justify-content:space-between;gap:8px;padding:3px 10px;margin-top:3px;border-top:1px solid var(--dsw-alias-border-l1,rgba(127,130,135,.18));font-size:10px;color:var(--dsw-alias-label-secondary,#545557)}",
       "." + NS + "-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--dsw-alias-bg-overlay,#ffffff);border:1px solid var(--dsw-alias-border-l2,#dcdcdc);box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(15,15,15,.14));font-size:11px;cursor:pointer}",
       "." + NS + "-pill:hover{border-color:var(--dsw-alias-brand-primary,#4176e6)}",
-      "." + NS + "-pillsub{font-size:10px;color:var(--dsw-alias-label-secondary,#545557);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      "." + NS + "-chip{width:340px;background:var(--dsw-alias-bg-overlay,#ffffff);border:1px solid var(--dsw-alias-border-l2,#dcdcdc);border-radius:10px;box-shadow:var(--dsw-shadow-lv2,0 8px 24px rgba(15,15,15,.14));padding:5px 10px 6px;cursor:pointer}",
-      "." + NS + "-chip:hover{border-color:var(--dsw-alias-brand-primary,#4176e6)}",
-      "." + NS + "-chiphead{display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:10px;color:var(--dsw-alias-label-secondary,#545557)}"
+      "." + NS + "-pillsub{font-size:10px;color:var(--dsw-alias-label-secondary,#545557);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
     ].join("\n");
 
     // ---- components ------------------------------------------------------
@@ -117,12 +132,13 @@ window.__ModuleLoader__.load({
 
     function GpuWidget() {
       const [data, setData] = useState(null);
-      const [collapsed, setCollapsed] = useState(() => {
-        try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch (e) { return false; }
-      });
+      const [pos, setPos] = useState(loadPos);
+      const [dragging, setDragging] = useState(false);
+      const [, forceTick] = useState(0); // re-render hook for resize clamping
       const pollMsRef = useRef(2000);
       const inFlight = useRef(false);
       const rootRef = useRef(null);
+      const dragRef = useRef(null);
 
       // Stacking fix: the host app stacks the shell.overlay layer at z-index 20,
       // while side-panel plugins (dsh-better-sidebar: panel host z 25, panel
@@ -145,9 +161,12 @@ window.__ModuleLoader__.load({
         }
       });
 
+      // Keep a saved position on screen if the window shrinks after it.
       useEffect(() => {
-        try { localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0"); } catch (e) { /* private mode */ }
-      }, [collapsed]);
+        const onResize = () => forceTick((n) => n + 1);
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+      }, []);
 
       useEffect(() => {
         let stopped = false;
@@ -174,16 +193,77 @@ window.__ModuleLoader__.load({
         return () => { stopped = true; clearTimeout(timer); };
       }, []);
 
-      // Loading / driver-missing: a quiet pill, not a card.
+      // ---- dragging (position persists across sessions via localStorage)
+
+      const clampPos = useCallback((x, y) => {
+        const el = rootRef.current;
+        const w = el ? el.offsetWidth : 340;
+        const hh = el ? el.offsetHeight : 100;
+        return {
+          x: Math.max(0, Math.min(window.innerWidth - w, x)),
+          y: Math.max(0, Math.min(window.innerHeight - hh, y))
+        };
+      }, []);
+
+      const onMove = (e) => {
+        const d = dragRef.current;
+        if (!d) return;
+        d.moved = true;
+        setPos(clampPos(e.clientX - d.dx, e.clientY - d.dy));
+      };
+
+      // Plain functions (recreated per render): the instance added to the
+      // window in onDragStart and the instance removing it in onUp are always
+      // from the same render, so add/remove pair up correctly.
+      const onUp = (e) => {
+        const d = dragRef.current;
+        dragRef.current = null;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        setDragging(false);
+        if (d && d.moved) {
+          const p = clampPos(e.clientX - d.dx, e.clientY - d.dy);
+          setPos(p);
+          savePos(p);
+        }
+      };
+
+      const onDragStart = (e) => {
+        if (e.button !== 0) return;
+        const el = rootRef.current;
+        if (!el) return;
+        e.preventDefault();
+        const r = el.getBoundingClientRect();
+        dragRef.current = { dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false };
+        setDragging(true);
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+      };
+
+      // Double-click (no drag involved) resets to the default corner.
+      const onDblClick = () => {
+        clearPos();
+        setPos(null);
+      };
+
+      // Clamped position for the current viewport (recomputed on resize).
+      const shownPos = pos ? clampPos(pos.x, pos.y) : null;
+      const rootStyle = shownPos
+        ? { left: shownPos.x + "px", top: shownPos.y + "px", right: "auto", bottom: "auto" }
+        : undefined;
+
+      // Loading / driver-missing: a quiet pill, not a strip.
       if (data == null) {
-        return h("div", { className: NS, ref: rootRef },
+        return h("div", { className: NS, ref: rootRef, style: rootStyle },
           h("div", { className: NS + "-pill", title: "Waiting for the first sample" },
             h("span", { className: NS + "-dot " + NS + "-dot-off" }),
             h("span", null, "GPU"),
             h("span", { className: NS + "-pillsub" }, "…")));
       }
       if (!data.ok) {
-        return h("div", { className: NS, ref: rootRef },
+        return h("div", { className: NS, ref: rootRef, style: rootStyle },
           h("div", { className: NS + "-pill", title: data.reason || "GPU telemetry unavailable" },
             h("span", { className: NS + "-dot " + NS + "-dot-off" }),
             h("span", null, "GPU"),
@@ -191,24 +271,6 @@ window.__ModuleLoader__.load({
       }
 
       const gpus = data.gpus || [];
-      const globalTone = worstTone(
-        ...gpus.map((g) => {
-          const memPct = g.memTotalMiB ? (g.memUsedMiB / g.memTotalMiB) * 100 : null;
-          return worstTone(utilTone(g.util), memTone(memPct), tempTone(g.temp));
-        })
-      );
-
-      if (collapsed) {
-        // Collapsed chip: the same per-GPU rows without header/footer.
-        return h("div", { className: NS, ref: rootRef },
-          h("div", { className: NS + "-chip", title: "Click to expand", onClick: () => setCollapsed(false) },
-            h("div", { className: NS + "-chiphead" },
-              h("span", { className: NS + "-dot" + dotCls(globalTone) }),
-              h("span", null, gpus.length + " GPU" + (gpus.length === 1 ? "" : "s"))
-            ),
-            h(GpuRows, { gpus })
-          ));
-      }
 
       let procsEl = null;
       if (data.processes && data.processes.length > 0) {
@@ -223,11 +285,13 @@ window.__ModuleLoader__.load({
         );
       }
 
-      return h("div", { className: NS, ref: rootRef },
-        h("div", { className: NS + "-card" },
-          h("div", { className: NS + "-head" },
-            h("button", { className: NS + "-btn", title: "Collapse", onClick: () => setCollapsed(true) }, "–")
-          ),
+      return h("div", { className: NS, ref: rootRef, style: rootStyle },
+        h("div", {
+          className: NS + "-card" + (dragging ? " " + NS + "-card-dragging" : ""),
+          title: "Drag to move, double-click to reset position",
+          onPointerDown: onDragStart,
+          onDoubleClick: onDblClick
+        },
           h("div", { className: NS + "-body" }, h(GpuRows, { gpus }), procsEl),
           h("div", { className: NS + "-foot" },
             h("span", null, "driver " + (data.driverVersion || "—") + " · " + data.backend),

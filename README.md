@@ -1,6 +1,6 @@
 # dsh-gpu-pulse
 
-A floating GPU monitor inside the DSH Web UI. Live per-GPU **utilization, VRAM, temperature and power**, plus the top VRAM-consuming processes when the driver reports them, rendered as a compact strip (one row per GPU) in the corner of the DeepSeek Harness page.
+A floating GPU monitor inside the DSH Web UI. Live per-GPU **utilization, VRAM, temperature and power**, plus the top VRAM-consuming processes when the driver reports them, rendered as a compact, draggable strip (one row per GPU) in the DeepSeek Harness page.
 
 Works on any machine with an NVIDIA driver (Windows or Linux): the data comes from `nvidia-smi`, so multi-GPU rigs show one instrument block per GPU. `nvidia-smi` only reports discrete NVIDIA adapters, so integrated GPUs (Intel UHD, AMD iGPU, ...) are never part of the display. No extra service to run and no agent tools to call: the card polls the DSH host's own route.
 
@@ -12,9 +12,9 @@ Works on any machine with an NVIDIA driver (Windows or Linux): the data comes fr
 
 The strip stays on top of side panels and side cards (for example the `dsh-better-sidebar` Files panel) instead of being covered by them.
 
-The minus button in the top-right corner collapses the strip to the same rows without header and footer:
+## Positioning
 
-![dsh-gpu-pulse collapsed, one row per GPU](docs/screenshot-chip.png)
+The strip starts at the bottom-right corner and is **draggable**: press and drag it anywhere on the page. The position is remembered (persisted per browser profile), so it stays where you left it across new sessions and reboots. Double-click the strip to reset it to the default corner.
 
 ## Install
 
@@ -28,7 +28,7 @@ dsh plugin --profile web add /path/to/dsh-gpu-pulse
 
 The npm name `dsh-gpu-pulse` is reserved: `dsh plugin --profile web add dsh-gpu-pulse` will work once the npm package is published.
 
-Then restart `dsh web`. The strip appears at the bottom-right corner of the GUI; the minus button in the top-right corner collapses it (the same rows without header and footer), and the collapsed state persists.
+Then restart `dsh web`. The strip appears at the bottom-right corner of the GUI; drag it wherever you like and the spot is remembered.
 
 ## What you see
 
@@ -43,7 +43,7 @@ One row per GPU, intentionally compact (about 85 px for two GPUs):
 - **TOP PROCESSES**: the biggest VRAM consumers, when the driver attributes memory per process (most recent Windows drivers report `[N/A]` for graphics contexts, in which case this section is omitted)
 - footer: driver (KMD) version + timestamp of the last sample
 
-The exact GPU name (as reported by the driver) is shown in every row and in the collapsed state.
+The exact GPU name (as reported by the driver) is shown in every row.
 
 ## Configuration
 
@@ -62,7 +62,7 @@ Everything is optional: defaults work out of the box. Override in the profile's 
 ## How it works
 
 - **Host** (`index.js`): registers `GET /dsh-gpu-pulse/status` on the DSH host web server. Each request runs up to four `nvidia-smi` queries (`--query-gpu` metrics, `--query-gpu=index,name`, `--version`, and optionally `--query-compute-apps`) with a 4 s timeout, parses the CSV, and returns JSON. Results are cached for ~1.2 s so several open tabs share one process per poll cycle.
-- **Client** (`client/client.js`): a hand-written `__ModuleLoader__` bundle (no build step, the only require is the platform `react` seed) that mounts the widget into the `shell.overlay` slot. It polls the status route and styles itself with the active theme's `--dsw-*` token variables (static fallbacks keep older hosts readable). Because side-panel plugins stack above the overlay slot's default z-index, the client promotes the overlay layer to the top of the app's stack at runtime, so side cards and drawers can never cover the widget.
+- **Client** (`client/client.js`): a hand-written `__ModuleLoader__` bundle (no build step, the only require is the platform `react` seed) that mounts the widget into the `shell.overlay` slot. It polls the status route, styles itself with the active theme's `--dsw-*` token variables (static fallbacks keep older hosts readable), and handles its own pointer events for dragging (the position is stored in `localStorage` under a `dsh-gpu-pulse:pos` key). Because side-panel plugins stack above the overlay slot's default z-index, the client promotes the overlay layer to the top of the app's stack at runtime, so side cards and drawers can never cover the widget.
 
 ## Requirements
 
