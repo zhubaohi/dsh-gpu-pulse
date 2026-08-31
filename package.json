@@ -1,6 +1,6 @@
 {
   "name": "dsh-gpu-pulse",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Floating GPU monitor inside the DSH Web UI: live per-GPU utilization, VRAM, temperature, power and top processes from nvidia-smi. · DSH Web 内置悬浮 GPU 监控：实时显示每张 GPU 的利用率、显存、温度、功耗与占用进程（nvidia-smi）。",
   "type": "module",
   "main": "index.js",

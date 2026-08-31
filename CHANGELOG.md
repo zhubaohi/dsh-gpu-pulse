@@ -3,6 +3,15 @@
 All notable changes to `dsh-gpu-pulse` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-08-31
+
+### Changed
+- Compact redesign: the card is now a slim strip with one row per GPU (status dot, exact GPU name, utilization, VRAM, temperature, power draw), roughly 85 px tall for two GPUs instead of about 300 px.
+- Removed the "GPU Pulse" name tag from the card header and the collapsed state; the collapse button (top-right) stays.
+- Removed the per-row meter bars and history sparklines to save space; fan speed is available in the row tooltip.
+- The collapsed state is now the same per-GPU rows without header and footer.
+- Whole-watt formatting uses no space (`97W`) to keep rows narrow; values >= 1 kW show as `1.20kW`.
+
 ## [1.0.1] - 2026-08-31
 
 ### Fixed
