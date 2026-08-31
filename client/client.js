@@ -317,7 +317,7 @@ window.__ModuleLoader__.load({
           h("div", { className: NS + "-head" },
             h("span", { className: NS + "-dot " + NS + "-dot-" + worst }),
             h("span", { className: NS + "-title" }, "GPU Pulse"),
-            h("button", { className: NS + "-btn", title: "Collapse to a pill", onClick: () => setCollapsed(true) }, "–")
+            h("button", { className: NS + "-btn", title: "Collapse", onClick: () => setCollapsed(true) }, "–")
           ),
           h("div", { className: NS + "-body" }, gpusEl, procsEl),
           h("div", { className: NS + "-foot" },
